@@ -1,0 +1,9 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+name: mep-beta-nlp-poc
+auth_mode: key
+description: "Managed Online Endpoint for Team Beta NLP Sentiment inference"
+tags:
+  Team: Team-Beta
+  Domain: NLP
+  Environment: Production
+  Project: Enterprise-MLOps-Platform

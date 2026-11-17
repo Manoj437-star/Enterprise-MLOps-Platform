@@ -1,0 +1,13 @@
+{
+  "team": "team-beta",
+  "domain": "nlp",
+  "model_name": "nlp-sentiment-beta",
+  "eval_accuracy": 0.7782,
+  "precision": 0.7699,
+  "recall": 0.7539,
+  "f1_score": 0.7618,
+  "target_threshold": 0.7,
+  "gate_passed": true,
+  "status": "APPROVED_FOR_REGISTRY",
+  "evaluation_timestamp": "2026-11-13T01:55:00Z"
+}

@@ -1,0 +1,12 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: cv-classifier-alpha
+version: 1
+type: custom_model
+path: ../outputs/model
+description: "Team Alpha Computer Vision PyTorch CNN model registered into Central Azure ML Registry"
+tags:
+  Team: Team-Alpha
+  Domain: Computer-Vision
+  Framework: PyTorch
+  Stage: Validated
+  Registry: amlregmlopssharedpoc

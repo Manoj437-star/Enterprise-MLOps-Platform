@@ -1,0 +1,51 @@
+# ==============================================================================
+# Azure DevOps Pipeline Template: Model Evaluation & Quality Gate
+# Evaluates accuracy threshold and gates promotion to Central Registry
+# ==============================================================================
+
+parameters:
+  - name: evaluationScript
+    type: string
+  - name: modelDirectory
+    type: string
+  - name: accuracyThreshold
+    type: number
+    default: 0.70
+  - name: workingDirectory
+    type: string
+
+steps:
+  - task: UsePythonVersion@0
+    displayName: "Setup Python 3.10"
+    inputs:
+      versionSpec: "3.10"
+
+  - script: |
+      python -m pip install --upgrade pip
+      pip install torch torchvision transformers scikit-learn
+    displayName: "Install Evaluation Dependencies"
+
+  - script: |
+      set -e
+      echo "Running model evaluation against quality threshold: ${{ parameters.accuracyThreshold }}"
+      python ${{ parameters.evaluationScript }} --model-dir ${{ parameters.modelDirectory }} --threshold ${{ parameters.accuracyThreshold }}
+
+      REPORT_PATH="${{ parameters.modelDirectory }}/evaluation_report.json"
+      if [ ! -f "$REPORT_PATH" ]; then
+        echo "ERROR: Evaluation report not found at $REPORT_PATH"
+        exit 1
+      fi
+
+      GATE_PASSED=$(python -c "import json; r = json.load(open('$REPORT_PATH')); print(r.get('gate_passed'))")
+      ACCURACY=$(python -c "import json; r = json.load(open('$REPORT_PATH')); print(r.get('eval_accuracy'))")
+
+      echo "Evaluation Result -> Accuracy: $ACCURACY, Gate Passed: $GATE_PASSED"
+
+      if [ "$GATE_PASSED" != "True" ]; then
+        echo "QUALITY GATE FAILED: Accuracy ($ACCURACY) does not meet target ($ {{ parameters.accuracyThreshold }})."
+        exit 1
+      fi
+
+      echo "QUALITY GATE PASSED: Model approved for central registry publishing."
+    displayName: "Execute Quality Gate Verification"
+    workingDirectory: ${{ parameters.workingDirectory }}

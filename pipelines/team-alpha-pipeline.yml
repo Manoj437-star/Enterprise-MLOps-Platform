@@ -1,0 +1,160 @@
+# ==============================================================================
+# Enterprise MLOps CI/CD Pipeline - Team Alpha (Computer Vision)
+# Workflow:
+#   Code Commit -> CI Trigger -> Dataset Validation -> Model Training ->
+#   Model Evaluation -> Model Registration -> STAGING Deployment ->
+#   Manual Approval -> PROD Deployment
+# ==============================================================================
+
+name: $(Date:yyyyMMdd)$(Rev:.r)-team-alpha-cv
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - ml/team-alpha/**
+      - pipelines/team-alpha-pipeline.yml
+      - pipelines/templates/**
+
+variables:
+  - name: azureServiceConnection
+    value: "sc-azure-mlops-platform"
+  - name: registryName
+    value: "amlregmlopssharedpoc"
+  - name: alphaDevRg
+    value: "rg-mlops-alpha-dev-poc"
+  - name: alphaDevWs
+    value: "aml-alpha-dev-poc"
+  - name: alphaStgRg
+    value: "rg-mlops-alpha-stg-poc"
+  - name: alphaStgWs
+    value: "aml-alpha-stg-poc"
+  - name: alphaPrdRg
+    value: "rg-mlops-alpha-prd-poc"
+  - name: alphaPrdWs
+    value: "aml-alpha-prd-poc"
+  - name: alphaEndpointName
+    value: "mep-alpha-cv-poc"
+
+stages:
+  # ----------------------------------------------------------------------------
+  # Stage 1: Dataset Validation
+  # ----------------------------------------------------------------------------
+  - stage: Validate_Dataset
+    displayName: "1. Dataset Validation"
+    jobs:
+      - job: ValidateData
+        displayName: "Verify Schema, Baseline Drift & Checksums"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/validate-dataset.yml
+            parameters:
+              datasetPath: "ml/team-alpha/data"
+              team: "Team-Alpha"
+              domain: "Computer-Vision"
+
+  # ----------------------------------------------------------------------------
+  # Stage 2: Model Training (DEV)
+  # ----------------------------------------------------------------------------
+  - stage: Train_DEV
+    displayName: "2. Model Training (DEV)"
+    dependsOn: Validate_Dataset
+    jobs:
+      - job: Train
+        displayName: "Execute Training on CPU Cluster"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/train-job.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup: $(alphaDevRg)
+              workspaceName: $(alphaDevWs)
+              jobConfigFile: "job.yaml"
+              workingDirectory: "ml/team-alpha/config"
+
+  # ----------------------------------------------------------------------------
+  # Stage 3: Model Evaluation & Quality Gate
+  # ----------------------------------------------------------------------------
+  - stage: Evaluate_Gate
+    displayName: "3. Model Evaluation"
+    dependsOn: Train_DEV
+    jobs:
+      - job: Evaluate
+        displayName: "Model Accuracy Gate Check"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/evaluate-gate.yml
+            parameters:
+              evaluationScript: "evaluate.py"
+              modelDirectory: "ml/team-alpha/outputs/model"
+              accuracyThreshold: 0.70
+              workingDirectory: "ml/team-alpha/src"
+
+  # ----------------------------------------------------------------------------
+  # Stage 4: Model Registration in Central Registry
+  # ----------------------------------------------------------------------------
+  - stage: Publish_Registry
+    displayName: "4. Model Registration"
+    dependsOn: Evaluate_Gate
+    jobs:
+      - job: Register
+        displayName: "Register Model in Central AML Registry"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/register-model.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              registryName: $(registryName)
+              modelConfigFile: "model-registry.yaml"
+              workingDirectory: "ml/team-alpha/config"
+
+  # ----------------------------------------------------------------------------
+  # Stage 5: STAGING Deployment & Smoke Test
+  # ----------------------------------------------------------------------------
+  - stage: Deploy_STAGING
+    displayName: "5. STAGING Deployment"
+    dependsOn: Publish_Registry
+    jobs:
+      - job: DeployStaging
+        displayName: "Deploy to STAGING Validation Workspace"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/deploy-staging.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup: $(alphaStgRg)
+              workspaceName: $(alphaStgWs)
+              modelId: "azureml://registries/amlregmlopssharedpoc/models/cv-classifier-alpha/versions/1"
+              endpointName: "mep-alpha-stg-poc"
+
+  # ----------------------------------------------------------------------------
+  # Stage 6: Production Deployment (Protected with Manual Approval Gate)
+  # ----------------------------------------------------------------------------
+  - stage: Deploy_PROD
+    displayName: "6. PROD Deployment"
+    dependsOn: Deploy_STAGING
+    jobs:
+      - deployment: DeployProd
+        displayName: "Deploy to PROD Managed Online Endpoint"
+        environment: "production-alpha"
+        pool:
+          vmImage: "ubuntu-latest"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-prod.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(alphaPrdRg)
+                    workspaceName: $(alphaPrdWs)
+                    endpointName: $(alphaEndpointName)
+                    deploymentName: "blue"
+                    modelId: "azureml://registries/amlregmlopssharedpoc/models/cv-classifier-alpha/versions/1"

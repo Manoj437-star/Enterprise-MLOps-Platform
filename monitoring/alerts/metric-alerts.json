@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the Central Log Analytics Workspace"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2021-08-01",
+      "name": "alert-mlops-high-inference-error-rate",
+      "location": "eastus2",
+      "properties": {
+        "displayName": "MLOps - High Inference 5xx Error Rate (> 5%)",
+        "description": "Fires when Managed Online Endpoint experiences > 5% 5xx server errors in a 5-minute window",
+        "severity": 1,
+        "enabled": true,
+        "evaluationFrequency": "PT5M",
+        "windowSize": "PT5M",
+        "scopes": [
+          "[parameters('logAnalyticsWorkspaceId')]"
+        ],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "AmlOnlineEndpointRequestLog | where TimeGenerated >= ago(5m) | summarize Total = count(), Errors = countif(StatusCode >= 500) | extend ErrorRate = (Errors * 100.0) / Total | where ErrorRate > 5.0",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/scheduledQueryRules",
+      "apiVersion": "2021-08-01",
+      "name": "alert-mlops-training-job-failed",
+      "location": "eastus2",
+      "properties": {
+        "displayName": "MLOps - Training Job Failure",
+        "description": "Fires when any Azure ML training experiment fails",
+        "severity": 2,
+        "enabled": true,
+        "evaluationFrequency": "PT15M",
+        "windowSize": "PT15M",
+        "scopes": [
+          "[parameters('logAnalyticsWorkspaceId')]"
+        ],
+        "criteria": {
+          "allOf": [
+            {
+              "query": "AmlComputeJobEvent | where TimeGenerated >= ago(15m) | where EventType == 'JobFailed'",
+              "timeAggregation": "Count",
+              "operator": "GreaterThan",
+              "threshold": 0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

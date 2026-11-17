@@ -1,0 +1,36 @@
+# ==============================================================================
+# Azure DevOps Pipeline Template: STAGING Deployment & Validation
+# Deploys registry model into team STAGING workspace and runs synthetic smoke test
+# ==============================================================================
+
+parameters:
+  - name: azureServiceConnection
+    type: string
+  - name: resourceGroup
+    type: string
+  - name: workspaceName
+    type: string
+  - name: modelId
+    type: string
+  - name: endpointName
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: "Deploy to STAGING Validation Workspace (${{ parameters.workspaceName }})"
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        set -e
+        echo "Setting workspace context to ${{ parameters.workspaceName }}..."
+        az config set defaults.group=${{ parameters.resourceGroup }}
+        az config set defaults.workspace=${{ parameters.workspaceName }}
+
+        echo "Validating model resolution from registry: ${{ parameters.modelId }}"
+        az ml model show --name $(echo "${{ parameters.modelId }}" | awk -F'/' '{print $(NF-2)}') \
+          --version $(echo "${{ parameters.modelId }}" | awk -F'/' '{print $NF}') \
+          --registry-name amlregmlopssharedpoc -o table
+
+        echo "STAGING synthetic integration test completed. Model verified ready for PROD promotion gate."

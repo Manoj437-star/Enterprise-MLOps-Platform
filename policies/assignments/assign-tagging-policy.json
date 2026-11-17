@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "resources": [
+    {
+      "type": "Microsoft.Authorization/policyAssignments",
+      "apiVersion": "2022-06-01",
+      "name": "audit-mlops-mandatory-tags",
+      "properties": {
+        "displayName": "Audit Mandatory MLOps Resource Tags",
+        "description": "Audits missing Project, Team, Environment, or ManagedBy tags on MLOps resources",
+        "policyDefinitionId": "/providers/Microsoft.Authorization/policyDefinitions/audit-mlops-mandatory-tags"
+      }
+    }
+  ]
+}

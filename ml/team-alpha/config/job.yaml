@@ -1,0 +1,29 @@
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+type: command
+name: team-alpha-cv-training
+display_name: "Team Alpha - PyTorch CNN Image Classifier Training"
+description: "Trains a CNN classifier with MLflow metrics tracking on Azure ML Compute Cluster"
+experiment_name: "team-alpha-computer-vision"
+
+code: ../src
+command: >-
+  python train.py
+  --epochs 5
+  --batch-size 64
+  --learning-rate 0.001
+  --output-dir ./outputs/model
+
+environment:
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest
+  conda_file: ../environment/conda.yaml
+
+compute: azureml:cpu-cluster
+
+resources:
+  instance_count: 1
+
+tags:
+  Team: Team-Alpha
+  Domain: Computer-Vision
+  Framework: PyTorch
+  Project: Enterprise-MLOps-Platform

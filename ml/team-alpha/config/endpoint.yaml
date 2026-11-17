@@ -1,0 +1,9 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
+name: mep-alpha-cv-poc
+auth_mode: key
+description: "Managed Online Endpoint for Team Alpha Computer Vision inference"
+tags:
+  Team: Team-Alpha
+  Domain: Computer-Vision
+  Environment: Production
+  Project: Enterprise-MLOps-Platform

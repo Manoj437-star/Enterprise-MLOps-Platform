@@ -1,0 +1,13 @@
+{
+  "team": "team-alpha",
+  "domain": "computer-vision",
+  "model_name": "cv-classifier-alpha",
+  "eval_accuracy": 0.653,
+  "precision": 0.6286,
+  "recall": 0.6283,
+  "f1_score": 0.6284,
+  "target_threshold": 0.65,
+  "gate_passed": true,
+  "status": "APPROVED_FOR_REGISTRY",
+  "evaluation_timestamp": "2026-11-13T01:50:00Z"
+}

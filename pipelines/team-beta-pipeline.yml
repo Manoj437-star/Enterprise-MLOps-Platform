@@ -1,0 +1,160 @@
+# ==============================================================================
+# Enterprise MLOps CI/CD Pipeline - Team Beta (NLP)
+# Workflow:
+#   Code Commit -> CI Trigger -> Dataset Validation -> Model Training ->
+#   Model Evaluation -> Model Registration -> STAGING Deployment ->
+#   Manual Approval -> PROD Deployment
+# ==============================================================================
+
+name: $(Date:yyyyMMdd)$(Rev:.r)-team-beta-nlp
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - ml/team-beta/**
+      - pipelines/team-beta-pipeline.yml
+      - pipelines/templates/**
+
+variables:
+  - name: azureServiceConnection
+    value: "sc-azure-mlops-platform"
+  - name: registryName
+    value: "amlregmlopssharedpoc"
+  - name: betaDevRg
+    value: "rg-mlops-beta-dev-poc"
+  - name: betaDevWs
+    value: "aml-beta-dev-poc"
+  - name: betaStgRg
+    value: "rg-mlops-beta-stg-poc"
+  - name: betaStgWs
+    value: "aml-beta-stg-poc"
+  - name: betaPrdRg
+    value: "rg-mlops-beta-prd-poc"
+  - name: betaPrdWs
+    value: "aml-beta-prd-poc"
+  - name: betaEndpointName
+    value: "mep-beta-nlp-poc"
+
+stages:
+  # ----------------------------------------------------------------------------
+  # Stage 1: Dataset Validation
+  # ----------------------------------------------------------------------------
+  - stage: Validate_Dataset
+    displayName: "1. Dataset Validation"
+    jobs:
+      - job: ValidateData
+        displayName: "Verify Schema, Baseline Drift & Checksums"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/validate-dataset.yml
+            parameters:
+              datasetPath: "ml/team-beta/data"
+              team: "Team-Beta"
+              domain: "NLP"
+
+  # ----------------------------------------------------------------------------
+  # Stage 2: Model Training (DEV)
+  # ----------------------------------------------------------------------------
+  - stage: Train_DEV
+    displayName: "2. Model Training (DEV)"
+    dependsOn: Validate_Dataset
+    jobs:
+      - job: Train
+        displayName: "Execute Training on CPU Cluster"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/train-job.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup: $(betaDevRg)
+              workspaceName: $(betaDevWs)
+              jobConfigFile: "job.yaml"
+              workingDirectory: "ml/team-beta/config"
+
+  # ----------------------------------------------------------------------------
+  # Stage 3: Model Evaluation & Quality Gate
+  # ----------------------------------------------------------------------------
+  - stage: Evaluate_Gate
+    displayName: "3. Model Evaluation"
+    dependsOn: Train_DEV
+    jobs:
+      - job: Evaluate
+        displayName: "Model Accuracy Gate Check"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/evaluate-gate.yml
+            parameters:
+              evaluationScript: "evaluate.py"
+              modelDirectory: "ml/team-beta/outputs/model"
+              accuracyThreshold: 0.70
+              workingDirectory: "ml/team-beta/src"
+
+  # ----------------------------------------------------------------------------
+  # Stage 4: Model Registration in Central Registry
+  # ----------------------------------------------------------------------------
+  - stage: Publish_Registry
+    displayName: "4. Model Registration"
+    dependsOn: Evaluate_Gate
+    jobs:
+      - job: Register
+        displayName: "Register Model in Central AML Registry"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/register-model.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              registryName: $(registryName)
+              modelConfigFile: "model-registry.yaml"
+              workingDirectory: "ml/team-beta/config"
+
+  # ----------------------------------------------------------------------------
+  # Stage 5: STAGING Deployment & Smoke Test
+  # ----------------------------------------------------------------------------
+  - stage: Deploy_STAGING
+    displayName: "5. STAGING Deployment"
+    dependsOn: Publish_Registry
+    jobs:
+      - job: DeployStaging
+        displayName: "Deploy to STAGING Validation Workspace"
+        pool:
+          vmImage: "ubuntu-latest"
+        steps:
+          - template: templates/deploy-staging.yml
+            parameters:
+              azureServiceConnection: $(azureServiceConnection)
+              resourceGroup: $(betaStgRg)
+              workspaceName: $(betaStgWs)
+              modelId: "azureml://registries/amlregmlopssharedpoc/models/nlp-sentiment-beta/versions/1"
+              endpointName: "mep-beta-stg-poc"
+
+  # ----------------------------------------------------------------------------
+  # Stage 6: Production Deployment (Protected with Manual Approval Gate)
+  # ----------------------------------------------------------------------------
+  - stage: Deploy_PROD
+    displayName: "6. PROD Deployment"
+    dependsOn: Deploy_STAGING
+    jobs:
+      - deployment: DeployProd
+        displayName: "Deploy to PROD Managed Online Endpoint"
+        environment: "production-beta"
+        pool:
+          vmImage: "ubuntu-latest"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - template: templates/deploy-prod.yml
+                  parameters:
+                    azureServiceConnection: $(azureServiceConnection)
+                    resourceGroup: $(betaPrdRg)
+                    workspaceName: $(betaPrdWs)
+                    endpointName: $(betaEndpointName)
+                    deploymentName: "blue"
+                    modelId: "azureml://registries/amlregmlopssharedpoc/models/nlp-sentiment-beta/versions/1"

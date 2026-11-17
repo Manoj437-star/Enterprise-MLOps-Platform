@@ -1,0 +1,6 @@
+{
+  "model_architecture": "BiLSTM-SentimentClassifier",
+  "vocab_size": 5000,
+  "num_classes": 2,
+  "framework": "PyTorch-Compatible"
+}

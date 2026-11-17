@@ -1,0 +1,49 @@
+# ==============================================================================
+# Azure DevOps Pipeline Template: Train Job
+# Submits training job to Azure ML DEV Workspace using Azure CLI v2
+# ==============================================================================
+
+parameters:
+  - name: azureServiceConnection
+    type: string
+  - name: resourceGroup
+    type: string
+  - name: workspaceName
+    type: string
+  - name: jobConfigFile
+    type: string
+  - name: workingDirectory
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: "Submit Azure ML Training Job (${{ parameters.workspaceName }})"
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      workingDirectory: ${{ parameters.workingDirectory }}
+      inlineScript: |
+        set -e
+        echo "Configuring Azure ML CLI defaults..."
+        az config set defaults.group=${{ parameters.resourceGroup }}
+        az config set defaults.workspace=${{ parameters.workspaceName }}
+
+        echo "Submitting training command job from ${{ parameters.jobConfigFile }}..."
+        JOB_NAME=$(az ml job create --file ${{ parameters.jobConfigFile }} --query name -o tsv)
+        echo "Job submitted successfully with Name: $JOB_NAME"
+
+        echo "Streaming job execution logs and awaiting completion..."
+        az ml job stream --name $JOB_NAME
+
+        JOB_STATUS=$(az ml job show --name $JOB_NAME --query status -o tsv)
+        echo "Job finished with status: $JOB_STATUS"
+
+        if [ "$JOB_STATUS" != "Completed" ]; then
+          echo "ERROR: Training job did not complete successfully. Status: $JOB_STATUS"
+          exit 1
+        fi
+
+        echo "Downloading trained model artifacts..."
+        az ml job download --name $JOB_NAME --output-name model --download-path ./outputs/
+        echo "##vso[task.setvariable variable=AML_JOB_NAME]$JOB_NAME"

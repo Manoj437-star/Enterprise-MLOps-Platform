@@ -1,0 +1,48 @@
+// ==============================================================================
+// Log Analytics KQL Queries for Enterprise MLOps Platform
+// Target Workspace: law-mlops-poc
+// ==============================================================================
+
+// 1. Training Compute Cluster Node Scaling & State Transitions
+AmlComputeClusterEvent
+| where TimeGenerated >= ago(24h)
+| project TimeGenerated, ClusterName, NodeCount, TargetNodeCount, EventType, Message
+| order by TimeGenerated desc;
+
+// 2. Compute Utilization & Idle Detection (FinOps)
+AmlComputeCpuGpuUtilization
+| where TimeGenerated >= ago(7d)
+| summarize AvgCpuPercentage = avg(CpuUtilization), MaxCpuPercentage = max(CpuUtilization) by ClusterName, bin(TimeGenerated, 1h)
+| render timechart;
+
+// 3. Managed Online Endpoint Inference Latency (P50, P95, P99)
+AmlOnlineEndpointRequestLog
+| where TimeGenerated >= ago(24h)
+| where EndpointName in ("mep-alpha-cv-poc", "mep-beta-nlp-poc")
+| summarize
+    P50_Latency_ms = percentile(RequestHandlingLatencyMs, 50),
+    P95_Latency_ms = percentile(RequestHandlingLatencyMs, 95),
+    P99_Latency_ms = percentile(RequestHandlingLatencyMs, 99),
+    TotalRequests = count()
+    by EndpointName, bin(TimeGenerated, 5m)
+| render timechart;
+
+// 4. Endpoint HTTP Status Code Distribution (Health & Error Rate)
+AmlOnlineEndpointRequestLog
+| where TimeGenerated >= ago(24h)
+| summarize RequestCount = count() by StatusCode, EndpointName, bin(TimeGenerated, 15m)
+| render barchart;
+
+// 5. Azure ML Experiment Run Failures
+AmlComputeJobEvent
+| where TimeGenerated >= ago(24h)
+| where EventType == "JobFailed"
+| project TimeGenerated, ExperimentName, JobId, ClusterName, ExitCode, Message
+| order by TimeGenerated desc;
+
+// 6. Key Vault Access Audit (Security Governance)
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where TimeGenerated >= ago(24h)
+| project TimeGenerated, OperationName, CallerIPAddress, identity_claim_oid_g, ResultType
+| order by TimeGenerated desc;

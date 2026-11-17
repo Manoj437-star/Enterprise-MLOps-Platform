@@ -1,0 +1,36 @@
+# ==============================================================================
+# Azure DevOps Pipeline Template: Model Registration
+# Publishes validated model into Central Azure ML Registry
+# ==============================================================================
+
+parameters:
+  - name: azureServiceConnection
+    type: string
+  - name: registryName
+    type: string
+    default: "amlregmlopssharedpoc"
+  - name: modelConfigFile
+    type: string
+  - name: workingDirectory
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: "Publish Model to Central Azure ML Registry (${{ parameters.registryName }})"
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      workingDirectory: ${{ parameters.workingDirectory }}
+      inlineScript: |
+        set -e
+        echo "Registering model to central Azure ML Registry: ${{ parameters.registryName }}"
+
+        REG_OUTPUT=$(az ml model create --file ${{ parameters.modelConfigFile }} --registry-name ${{ parameters.registryName }})
+        MODEL_NAME=$(echo "$REG_OUTPUT" | python -c "import sys, json; print(json.load(sys.stdin).get('name'))")
+        MODEL_VERSION=$(echo "$REG_OUTPUT" | python -c "import sys, json; print(json.load(sys.stdin).get('version'))")
+
+        echo "Registered Model: $MODEL_NAME, Version: $MODEL_VERSION"
+        echo "##vso[task.setvariable variable=REGISTERED_MODEL_NAME]$MODEL_NAME"
+        echo "##vso[task.setvariable variable=REGISTERED_MODEL_VERSION]$MODEL_VERSION"
+        echo "##vso[task.setvariable variable=REGISTRY_MODEL_ID]azureml://registries/${{ parameters.registryName }}/models/$MODEL_NAME/versions/$MODEL_VERSION"

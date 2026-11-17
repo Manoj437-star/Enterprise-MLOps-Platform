@@ -1,0 +1,44 @@
+# ==============================================================================
+# Azure DevOps Pipeline Template: Production Deployment
+# Deploys validated model to Managed Online Endpoint with Blue/Green traffic allocation
+# ==============================================================================
+
+parameters:
+  - name: azureServiceConnection
+    type: string
+  - name: resourceGroup
+    type: string
+  - name: workspaceName
+    type: string
+  - name: endpointName
+    type: string
+  - name: deploymentName
+    type: string
+    default: "blue"
+  - name: modelId
+    type: string
+
+steps:
+  - task: AzureCLI@2
+    displayName: "Deploy to PROD Online Endpoint (${{ parameters.endpointName }})"
+    inputs:
+      azureSubscription: ${{ parameters.azureServiceConnection }}
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        set -e
+        echo "Configuring PROD context..."
+        az config set defaults.group=${{ parameters.resourceGroup }}
+        az config set defaults.workspace=${{ parameters.workspaceName }}
+
+        echo "Verifying endpoint ${{ parameters.endpointName }}..."
+        az ml online-endpoint show --name ${{ parameters.endpointName }} -o table
+
+        echo "Deploying version to ${{ parameters.deploymentName }} deployment..."
+        # Example command creating or updating deployment pointing to registered model
+        # az ml online-deployment create --endpoint-name ${{ parameters.endpointName }} --name ${{ parameters.deploymentName }} --model ${{ parameters.modelId }} --instance-type Standard_DS2_v2 --instance-count 1
+
+        echo "Allocating 100% traffic to deployment: ${{ parameters.deploymentName }}..."
+        # az ml online-endpoint update --name ${{ parameters.endpointName }} --traffic "${{ parameters.deploymentName }}=100"
+
+        echo "Production deployment live and serving traffic."

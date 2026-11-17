@@ -1,0 +1,12 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: nlp-sentiment-beta
+version: 1
+type: custom_model
+path: ../outputs/model
+description: "Team Beta NLP Sentiment Classifier model registered into Central Azure ML Registry"
+tags:
+  Team: Team-Beta
+  Domain: NLP
+  Framework: PyTorch
+  Stage: Validated
+  Registry: amlregmlopssharedpoc
